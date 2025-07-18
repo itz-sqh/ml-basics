@@ -7,15 +7,17 @@ template<typename mtype = double>
 mtype rand_val() {
     return static_cast<mtype>(rand())/static_cast<mtype>(RAND_MAX);
 }
-template<typename mtype = double>
-mtype sigmoid(mtype x) {
-    return 1.0 / (1.0 + exp(-x));
-}
-template<typename mtype = double>
-mtype sigmoid_der(mtype x) {
-    mtype s = sigmoid<mtype>(x);
-    return s*(1-s);
-}
+
+template<typename atype>
+struct Sigmoid {
+    atype operator()(atype x) const {
+        return 1.0/(1.0+std::exp(-x));
+    }
+    atype derivative(atype x) const {
+        atype s = (*this)(x);
+        return s*(1-s);
+    }
+};
 
 template<typename mtype = double>
 struct Matrix {
@@ -92,6 +94,17 @@ struct Matrix {
         *this = *this * vec;
         return *this;
     }
+    constexpr Matrix operator*(mtype val) {
+        Matrix res(n,m);
+        for (size_t i = 0; i < n; i++)
+            for (size_t j = 0; j < m; j++)
+                res[i][j] = a[i][j] * val;
+        return res;
+    }
+    constexpr Matrix operator*=(mtype val) {
+        *this = *this * val;
+        return *this;
+    }
 
     std::vector<mtype>& operator[] (size_t i) {
         assert(i < n && "Index out of bounds");
@@ -139,15 +152,23 @@ struct Matrix {
                 res.a[i-r1][j-c1] = a[i][j];
         return res;
     }
-    void sigmoid() {
-        for (size_t i = 0; i < n; i++)
-            for (size_t j = 0; j < m; j++)
-                a[i][j] = ::sigmoid<mtype>(a[i][j]);
+    constexpr Matrix transpose() const {
+        Matrix res(m,n);
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < m; j++)
+                res.a[j][i] = a[i][j];
+        return res;
     }
-    void sigmoid_der() {
+    constexpr void fill(mtype val) {
         for (size_t i = 0; i < n; i++)
             for (size_t j = 0; j < m; j++)
-                a[i][j] = ::sigmoid_der<mtype>(a[i][j]);
+                a[i][j] = val;
+    }
+    template<typename ftype>
+    void apply(ftype func) {
+        for (size_t i = 0; i < n; i++)
+            for (size_t j = 0; j < m; j++)
+                a[i][j] = func(a[i][j]);
     }
     void rand(mtype min = {0}, mtype max = {1}) {
         for (size_t i = 0; i < n; i++)
@@ -184,10 +205,11 @@ template<typename mtype = double> constexpr std::ostream& operator << (std::ostr
 
 
 
-template<typename ntype = double>
+template<typename ntype = double, typename Activation = Sigmoid<ntype>>
 struct Neural {
 
     size_t n;
+    Activation act;
     std::vector<Matrix<ntype>> weight;
     std::vector<Matrix<ntype>> bias;
     std::vector<Matrix<ntype>> activation;
@@ -214,7 +236,7 @@ struct Neural {
         for (size_t i = 0; i < n; i++) {
             activation[i+1] = activation[i] * weight[i];
             activation[i+1] += bias[i];
-            activation[i+1].sigmoid();
+            activation[i+1].apply(act);
         }
     }
     ntype cost(const Matrix<ntype> & tin, const Matrix<ntype>& tout) {
@@ -236,7 +258,7 @@ struct Neural {
         }
         return res/p;
     }
-    void gradients_naive(Neural<ntype>& grad, ntype eps, const Matrix<ntype>& tin, const Matrix<ntype>& tout) {
+    void gradients_naive(Neural& grad, ntype eps, const Matrix<ntype>& tin, const Matrix<ntype>& tout) {
         ntype saved;
         ntype c = this->cost(tin,tout);
         for (size_t i = 0; i < n; i++) {
@@ -258,10 +280,51 @@ struct Neural {
                 }
             }
         }
-
-
     }
-    void apply_gradients(Neural<ntype>& grad, ntype rate) {
+    void gradients(Neural& grad, const Matrix<ntype>& tin, const Matrix<ntype>& tout) {
+        const size_t p = tin.n;
+        for (size_t i = 0; i < n; i++) {
+            grad.weight[i].fill(0);
+            grad.bias[i].fill(0);
+        }
+        std::vector<Matrix<ntype>> a(n+1);
+        std::vector<Matrix<ntype>> z(n);
+        std::vector<Matrix<ntype>> d(n);
+
+
+        for (size_t i = 0; i < p; i++) {
+            Matrix<ntype> x = tin.row(i);
+            Matrix<ntype> y = tout.row(i);
+
+            a[0] = x;
+            // forward
+            for (size_t j = 0; j < n; j++) {
+                z[j] = a[j]*weight[j]+bias[j];
+                a[j+1] = z[j];
+                a[j+1].apply(act);
+            }
+
+            d[n-1] = a[n] - y;
+            for (size_t j = 0; j < d[n-1].m; j++)
+                d[n-1][0][j] *= act.derivative(z[n-1][0][j]);
+
+            for (int l = n - 2; l>=0; l--) {
+                d[l] = d[l+1] * weight[l+1].transpose();
+                for (size_t j = 0; j < d[l].m; j++)
+                    d[l][0][j] *= act.derivative(z[l][0][j]);
+            }
+
+            for (size_t l = 0; l < n; l++) {
+                grad.bias[l] += d[l];
+                grad.weight[l] += a[l].transpose() * d[l];
+            }
+        }
+        for (size_t i = 0; i < n; i++) {
+            grad.weight[i] *= static_cast<ntype>(1.0/p);
+            grad.bias[i] *= static_cast<ntype>(1.0/p);
+        }
+    }
+    void apply_gradients(Neural& grad, ntype rate) {
         for (size_t i = 0; i < n; i++) {
             for (size_t j = 0; j < weight[i].n; j++) {
                 for (size_t k = 0; k < weight[i].m; k++) {
