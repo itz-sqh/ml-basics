@@ -22,7 +22,7 @@ struct Sigmoid {
 template<typename mtype = double>
 struct Matrix {
     constexpr Matrix() : n(0), m(0) {}
-    constexpr Matrix(size_t n, size_t m, bool identity = false) : n(n),m(m), a(n,std::vector<mtype>(m,0)) {
+    constexpr Matrix(size_t n, size_t m, const bool identity = false) : n(n),m(m), a(n,std::vector<mtype>(m,0)) {
         if (identity) {
             assert(!(identity && n!=m) && "Identity Matrix must be a square Matrix");
             for (size_t i = 0; i < n; i++) {
@@ -181,8 +181,8 @@ struct Matrix {
                 is >> a[i][j];
     }
     constexpr void to_stream(std::ostream& os,
-               int precision,
-               int col_width,
+               int precision = 4,
+               int col_width = 4,
                int offset = 0) const
     {
         os << std::fixed << std::setprecision(precision)
@@ -209,13 +209,16 @@ template<typename ntype = double, typename Activation = Sigmoid<ntype>>
 struct Neural {
 
     size_t n;
-    Activation act;
     std::vector<Matrix<ntype>> weight;
     std::vector<Matrix<ntype>> bias;
     std::vector<Matrix<ntype>> activation;
 
-    Neural(const std::vector<size_t>& layers, bool random_init = true) : n(layers.size()-1) {
-        assert(layers.size() >= 1 && "Neural must have at least input and output layers");
+    Activation act;
+
+
+
+    explicit Neural(const std::vector<size_t>& layers, bool random_init = true) : n(layers.size()-1) {
+        assert(!layers.empty() && "Neural must have at least input and output layers");
 
         weight.resize(n);
         bias.resize(n);
@@ -259,6 +262,9 @@ struct Neural {
         return res/p;
     }
     void gradients_naive(Neural& grad, ntype eps, const Matrix<ntype>& tin, const Matrix<ntype>& tout) {
+        assert(tin.n == tout.n && "Input and output must have the same number of samples");
+        assert(tin.m == activation[0].m && "Input size must match neural input size");
+        assert(tout.m == activation.back().m && "Output size must match neural output size");
         ntype saved;
         ntype c = this->cost(tin,tout);
         for (size_t i = 0; i < n; i++) {
@@ -276,21 +282,17 @@ struct Neural {
                     bias[i][j][k]+=eps;
                     grad.bias[i][j][k] = (this->cost(tin,tout)-c)/eps;
                     bias[i][j][k] = saved;
-
                 }
             }
         }
     }
     void gradients(Neural& grad, const Matrix<ntype>& tin, const Matrix<ntype>& tout) {
         const size_t p = tin.n;
-        for (size_t i = 0; i < n; i++) {
-            grad.weight[i].fill(0);
-            grad.bias[i].fill(0);
-        }
+        grad.zero();
+
         std::vector<Matrix<ntype>> a(n+1);
         std::vector<Matrix<ntype>> z(n);
         std::vector<Matrix<ntype>> d(n);
-
 
         for (size_t i = 0; i < p; i++) {
             Matrix<ntype> x = tin.row(i);
@@ -338,6 +340,14 @@ struct Neural {
             }
         }
     }
+    void zero() {
+        for (size_t i = 0; i < n; i++) {
+            weight[i].fill(0);
+            bias[i].fill(0);
+            activation[i].fill(0);
+        }
+        activation[n].fill(0);
+    }
     constexpr void from_stream(std::istream& is) {
         is >> n;
         weight.clear();
@@ -368,7 +378,7 @@ struct Neural {
     }
 
     constexpr void to_stream(std::ostream& os,
-                        int precision  = 6,
+                        int precision  = 4,
                         int col_width  = 10) const
     {
         os << "nn = (\n";
