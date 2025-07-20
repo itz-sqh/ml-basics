@@ -1,4 +1,5 @@
 #pragma once
+#include <random>
 #include <vector>
 #include<cassert>
 #include<iomanip>
@@ -130,21 +131,21 @@ struct Matrix {
         assert(i<n && j < m && "Index out of bounds");
         return a[i][j];
     }
-    constexpr Matrix row(size_t r) const {
+    Matrix row(size_t r) const {
         assert(r < n && "Row index out of bounds");
         Matrix res(1,m);
         for (size_t i = 0; i < m; i++)
             res[0][i] = a[r][i];
         return res;
     }
-    constexpr Matrix col(size_t c) const {
+    Matrix col(size_t c) const {
         assert(c < m && "Column index out of bounds");
         Matrix res(n, 1);
         for (size_t i = 0; i < n; ++i)
             res[i][0] = a[i][c];
         return res;
     }
-    constexpr Matrix subMatrix(size_t r1, size_t c1, size_t r2, size_t c2) const {
+    Matrix subMatrix(size_t r1, size_t c1, size_t r2, size_t c2) const {
         assert(r2 < n && c2 < m && r1 <= r2 && c1 <= c2);
         Matrix res(r2-r1+1, c2-c1+1);
         for (size_t i = r1; i <= r2; ++i)
@@ -152,14 +153,26 @@ struct Matrix {
                 res.a[i-r1][j-c1] = a[i][j];
         return res;
     }
-    constexpr Matrix transpose() const {
+    Matrix transpose() const {
         Matrix res(m,n);
         for (int i = 0; i < n; i++)
             for (int j = 0; j < m; j++)
                 res.a[j][i] = a[i][j];
         return res;
     }
-    constexpr void fill(mtype val) {
+    void shuffle_rows() {
+        for (size_t i = 0; i < n; i++) {
+            size_t j = i + rand()%(n-i);
+            if (i!=j) {
+                for (size_t k = 0; k < m; k++) {
+                    mtype t = a[i][k];
+                    a[i][k] = a[j][k];
+                    a[j][k] = t;
+                }
+            }
+        }
+    }
+    void fill(mtype val) {
         for (size_t i = 0; i < n; i++)
             for (size_t j = 0; j < m; j++)
                 a[i][j] = val;
@@ -201,8 +214,6 @@ struct Matrix {
 };
 template<typename mtype = double> constexpr std::istream& operator >> (std::istream& st, Matrix<mtype>& m) { m.from_stream(st); return st; }
 template<typename mtype = double> constexpr std::ostream& operator << (std::ostream& st, const Matrix<mtype>& m) { m.to_stream(st); return st; }
-
-
 
 
 template<typename ntype = double, typename Activation = Sigmoid<ntype>>
@@ -324,6 +335,30 @@ struct Neural {
         for (size_t i = 0; i < n; i++) {
             grad.weight[i] *= static_cast<ntype>(1.0/p);
             grad.bias[i] *= static_cast<ntype>(1.0/p);
+        }
+    }
+    void batch_process(Neural& grad, const Matrix<ntype>& tin, const Matrix<ntype>& tout, ntype rate, size_t batch = 32, size_t epoch = 1, bool shuffle = true) {
+        size_t n = tin.n;
+        for (int e = 0; e < epoch; e++) {
+            std::vector<size_t> idx(n);
+            std::iota(idx.begin(),idx.end(),0);
+            if (shuffle) std::ranges::shuffle(idx, std::mt19937(std::random_device()()));
+
+            for (size_t i = 0; i < n; i+=batch) {
+                size_t r = std::min(i+batch,n);
+                size_t len = r - i;
+
+                Matrix<ntype> in(len,tin.m);
+                Matrix<ntype> out(len,tout.m);
+
+                for (size_t j = 0; j < len; j++) {
+                    size_t id = idx[i+j];
+                    std::copy(tin[id].begin(),tin[id].end(),in[j].begin());
+                    std::copy(tout[id].begin(),tout[id].end(),out[j].begin());
+                }
+                gradients(grad,in,out);
+                apply_gradients(grad,rate);
+            }
         }
     }
     void apply_gradients(Neural& grad, ntype rate) {
