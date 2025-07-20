@@ -19,6 +19,17 @@ struct Sigmoid {
         return s*(1-s);
     }
 };
+template<typename atype>
+struct ReLU {
+    atype operator()(atype x) const {
+        return (x>0) ? x : 0;
+    }
+    atype derivative(atype x) const {
+        return (x>0) ? 1 : 0;
+    }
+};
+
+
 
 template<typename mtype = double>
 struct Matrix {
@@ -214,7 +225,22 @@ struct Matrix {
 };
 template<typename mtype = double> constexpr std::istream& operator >> (std::istream& st, Matrix<mtype>& m) { m.from_stream(st); return st; }
 template<typename mtype = double> constexpr std::ostream& operator << (std::ostream& st, const Matrix<mtype>& m) { m.to_stream(st); return st; }
-
+template<typename atype>
+struct Softmax {
+    void operator()(Matrix<atype>& mat) const {
+        for (size_t i = 0; i < mat.n; ++i) {
+            atype max_val = *std::max_element(mat[i].begin(), mat[i].end());
+            atype sum = 0;
+            for (size_t j = 0; j < mat.m; ++j) {
+                mat[i][j] = exp(mat[i][j] - max_val);
+                sum += mat[i][j];
+            }
+            for (size_t j = 0; j < mat.m; ++j) {
+                mat[i][j] /= sum;
+            }
+        }
+    }
+};
 
 template<typename ntype = double, typename Activation = Sigmoid<ntype>>
 struct Neural {
@@ -228,7 +254,7 @@ struct Neural {
 
 
 
-    explicit Neural(const std::vector<size_t>& layers, bool random_init = true) : n(layers.size()-1) {
+    explicit Neural(const std::vector<size_t>& layers) : n(layers.size()-1) {
         assert(!layers.empty() && "Neural must have at least input and output layers");
 
         weight.resize(n);
@@ -237,13 +263,21 @@ struct Neural {
         for (size_t i = 0; i < n; i++) {
             weight[i] = Matrix<ntype>(layers[i],layers[i+1]);
             bias[i] = Matrix<ntype>(1,layers[i+1]);
-            if (random_init) {
-                weight[i].rand();
-                bias[i].rand();
-            }
         }
         for (size_t i = 0; i < n + 1; i++) {
             activation[i] = Matrix<ntype>(1,layers[i]);
+        }
+    }
+    void random_init(ntype low, ntype high) {
+        for (size_t i = 0; i < n; i++) {
+            weight[i].rand(low,high);
+            bias[i].rand(low,high);
+        }
+    }
+    void xavier_init() {
+        for (size_t i = 0; i < n; i++) {
+            float range = std::sqrt(6.0f/(weight[i].n + weight[i].m));
+            weight[i].rand(-range,range);
         }
     }
     void forward() {
