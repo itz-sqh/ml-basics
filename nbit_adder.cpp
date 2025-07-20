@@ -5,9 +5,7 @@ using namespace std;
 using Mat = Matrix<float>;
 
 
-constexpr int bits = 4;
-
-
+constexpr int bits = 6;
 
 struct Gaussian {
     double operator()(const double x) const {
@@ -36,18 +34,20 @@ int main() {
         }
         tout[i][bits] = (z >> bits) & 1;
     }
-    const std::vector<size_t> layers{2*bits,4*bits,bits+1};
-    Neural<float,Gaussian> nn(layers);
-    Neural<float,Gaussian> grad(layers);
+
+
+    constexpr float rate = 1;
+    const std::vector<size_t> layers{2*bits,bits*bits,bits+1};
+    Neural<float> nn(layers);
+    Neural<float> grad(layers);
 
     cout << nn.cost(tin,tout) << endl;
-    for (int i = 0; i < 3e4; i++) {
-        constexpr float rate = 1;
-        nn.gradients(grad,tin,tout);
-        nn.apply_gradients(grad,rate);
-        if (i%500==0)
-            cout << i << ": c = " << nn.cost(tin,tout) << endl;
+
+    for (int i = 0; i < 1e4; i++) {
+        nn.batch_process(grad,tin,tout,rate,50,2,true);
+        if (i%500==0) cout << i << ": c = " << nn.cost(tin,tout) << endl;
     }
+
     cout << nn.cost(tin,tout) << endl << endl;
     for (size_t i = 0; i < tin.n; ++i) {
         nn.activation[0] = tin.row(i);
