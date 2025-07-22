@@ -3,8 +3,6 @@ project(ml-basics)
 
 set(CMAKE_CXX_STANDARD 23)
 
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-
 set(STB_IMAGE_URL "https://raw.githubusercontent.com/nothings/stb/master/stb_image.h")
 set(STB_IMAGE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/stb_image.h")
 
@@ -22,6 +20,6 @@ if(NOT EXISTS "${STB_IMAGE_FILE}")
     endif()
 endif()
 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-
-add_executable(${PROJECT_NAME} examples/digit_recognizer.cpp)
+add_executable(${PROJECT_NAME} main.cpp)

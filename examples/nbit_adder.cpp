@@ -1,5 +1,5 @@
 #include<iostream>
-#include "../neural.h"
+#include"neural.h"
 
 using Mat = Matrix<float>;
 using NN = Neural<float,Gaussian<float>>;
