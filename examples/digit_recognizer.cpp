@@ -2,8 +2,8 @@
 #include<memory>
 #include<vector>
 #include<filesystem>
-#include "../neural.h"
-#include "../png_to_raw.h"
+#include"neural.h"
+#include"png_to_raw.h"
 
 using Mat = Matrix<float>;
 using NN = Neural<float, Sigmoid<float>>;
@@ -88,7 +88,6 @@ int main() {
     for (int i = 0; i < 50; i++) {
         constexpr float rate = 1e-1;
         nn.batch_process(grad, tin, tout, rate, 64, 10, true);
-        nn.apply_gradients(grad, rate);
         std::cout << i + 1 << ": cost = " << nn.cost(tin, tout) << std::endl;
     }
 
