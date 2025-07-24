@@ -8,8 +8,9 @@
 using Mat = Matrix<float>;
 using NN = Neural<float, Sigmoid<float>>;
 
-const std::string training_base_path = "C:/Users/Egor/Desktop/training";
-const std::string testing_base_path = "C:/Users/Egor/Desktop/testing";
+// Path to MNIST dataset with pngs
+const std::string training_base_path = "C:/Users/sq/Desktop/training";
+const std::string testing_base_path = "C:/Users/sq/Desktop/testing";
 
 constexpr int image_size = 28;
 constexpr int digits = 10;
